@@ -172,23 +172,6 @@ def create_flex(surface, joints, base_name, rig, follicleShapes, bulge, sink, tr
 
     # use a remap value node and some math nodes to drive the muscle flex and stretch
     for i in range(len(joints)):
-        # remap = cmds.createNode('remapValue', n=f'{joints[i]}_remap')
-        # bulgePlusSink = cmds.createNode('addDoubleLinear', n=f'{joints[i]}_bulgePlusSink')
-        # onePlusTrigger = cmds.createNode('addDoubleLinear', n=f'{joints[i]}_onePlusTrigger')
-        # timesMultiplier = cmds.createNode('multDoubleLinear', n=f'{joints[i]}_timesMultiplier')
-        # cmds.connectAttr(f'{surface}.bulge', f'{bulgePlusSink}.input1')
-        # cmds.connectAttr(f'{surface}.sink', f'{bulgePlusSink}.input2')
-        # cmds.connectAttr(f'{surface}.triggerLength', f'{onePlusTrigger}.input1')
-        # cmds.setAttr(f'{onePlusTrigger}.input2', 1.0)
-        # cmds.connectAttr(f'{onePlusTrigger}.output', f'{remap}.inputMax')
-        # cmds.connectAttr(f'{bulgePlusSink}.output', f'{timesMultiplier}.input1')
-        # cmds.connectAttr(f'{surface}.{joints[i]}', f'{timesMultiplier}.input2')
-        # cmds.connectAttr(f'{timesMultiplier}.output', f'{remap}.outputMin')
-        # cmds.connectAttr(f'{surface}.triggerLength', f'{remap}.inputMin')
-        # cmds.connectAttr(f'{surface}.factor', f'{remap}.inputValue')
-        # cmds.setAttr(f'{remap}.outputMax', 0.0)
-        # constraint = f'{joints[i]}_parentConstraint1'
-        # cmds.connectAttr(f'{remap}.outValue', f'{constraint}.target[0].targetOffsetTranslateZ')
 
         # above stretch factor of 1.0
         remapAbove = cmds.createNode('remapValue', n=f'{joints[i]}_remapAboveZero')
@@ -236,6 +219,14 @@ def create_flex(surface, joints, base_name, rig, follicleShapes, bulge, sink, tr
 
         constraint = f'{joints[i]}_parentConstraint1'
         cmds.connectAttr(f'{condition}.outColorR', f'{constraint}.target[0].targetOffsetTranslateZ')
+
+    # add normalized driver value to drive corrective shapes with
+    cmds.addAttr(surface, ln='shapeDriver', at='float', h=False, k=True)
+    shape_remap = cmds.createNode('remapValue', n=f'{base_name}_shape_remap')
+    cmds.connectAttr(f'{surface}.triggerLength', f'{shape_remap}.inputMax')
+    cmds.setAttr(f'{shape_remap}.inputMin', 1.0)
+    cmds.connectAttr(f'{surface}.factor', f'{shape_remap}.inputValue')
+    cmds.connectAttr(f'{shape_remap}.outValue', f'{surface}.shapeDriver')
 
 
 
@@ -302,14 +293,22 @@ def mirror_guides():
     else:
         all_joints = cmds.ls(type='joint')
         for joint in all_joints:
-            if '_L' in joint and check_for_attr(joint, 'parent', 'joint'):
+            if '_L' or '_l' in joint and check_for_attr(joint, 'parent', 'joint'):
                 to_mirror.append(joint)
 
     for guide in to_mirror:
-        right_guide = cmds.mirrorJoint(guide, sr =['_L','_R'], myz=True, mb=True)[0]
+        if '_L' in guide:
+            right_guide = cmds.mirrorJoint(guide, sr =['_L','_R'], myz=True, mb=True)[0]
+        elif '_l' in guide:
+            right_guide = cmds.mirrorJoint(guide, sr=['_l', '_r'], myz=True, mb=True)[0]
+
         # mirror parent attr
         parent_left = cmds.getAttr(f'{guide}.parent')
-        parent_right = parent_left.replace('_L','_R')
+        if '_L' in guide:
+            parent_right = parent_left.replace('_L','_R')
+        elif '_l' in guide:
+            parent_right = parent_left.replace('_l', '_r')
+
         if cmds.objExists(parent_right):
             cmds.setAttr(f'{right_guide}.parent', parent_right, type='string')
         else:
