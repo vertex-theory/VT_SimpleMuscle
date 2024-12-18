@@ -45,7 +45,7 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         section_1_title.setAlignment(QtCore.Qt.AlignLeft)
         section_1_layout.addWidget(section_1_title)
 
-        muscle_name_label = QtWidgets.QLabel("Muscle Name (Use _L, _M, _R):")
+        muscle_name_label = QtWidgets.QLabel("Muscle Name (Use _L/_l, _M/_m, _R/_r):")
         section_1_layout.addWidget(muscle_name_label)
 
         muscle_name_layout = QtWidgets.QHBoxLayout()
@@ -88,7 +88,7 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         # Second Section: Set Guide Attributes
         section_2_layout = QtWidgets.QVBoxLayout()
         section_2_title = QtWidgets.QLabel(
-            "2. Mirror Muscle Guides\nLeft to Right\nMuscle names must use (_L, _M, _R)\nIf guides are selected it will mirror just those guides.\nIf no guides are selected it will mirror all the _L guides")
+            "2. Mirror Muscle Guides\nLeft to Right\nMuscle names must use (_L/_l, _M/_m, _R/_r)\nIf guides are selected it will mirror just those guides.\nIf no guides are selected it will mirror all the _L guides")
         section_2_title.setAlignment(QtCore.Qt.AlignLeft)
         section_2_layout.addWidget(section_2_title)
 
