@@ -1,6 +1,14 @@
 import maya.cmds as cmds
-from PySide2 import QtWidgets, QtCore
-import shiboken2
+try:
+    from PySide2 import QtWidgets, QtCore
+except ImportError:
+    from PySide6 import QtWidgets, QtCore
+
+try:
+    from shiboken2 import wrapInstance  # Maya 2024 and earlier
+except ImportError:
+    from shiboken6 import wrapInstance  # Maya 2025 and later
+
 import maya.OpenMayaUI as omui
 import importlib
 import VT_SimpleMuscle.lib as sm
@@ -15,7 +23,7 @@ TODO
 # Function to get the main Maya window
 def get_maya_main_window():
     main_window_ptr = omui.MQtUtil.mainWindow()
-    return shiboken2.wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
 
 
 # Main UI class
