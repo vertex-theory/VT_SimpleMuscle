@@ -4,7 +4,7 @@ import maya.cmds as cmds
 
 '''
 
-def setup(joints, num_joints=1, parent=None):
+def setup(joints, num_joints=1, parent=None, bulge=None, sink=None, triggerLength=None):
     rig=create_rig_hierarchy(joints[0])
     curves=create_curves(joints)
     surface = create_surface(curves, joints[0], rig)
@@ -12,7 +12,7 @@ def setup(joints, num_joints=1, parent=None):
         right_side = True
     else:
         right_side = False
-    def_joints = joints_on_surface(surface, joints[0], rig, num_joints, parent, right_side)
+    def_joints = joints_on_surface(surface, joints[0], rig, num_joints, parent, right_side, bulge, sink, triggerLength)
     return (def_joints)
 
 def create_curves(joints, dir='Z', offsetPercentLength = 10):
@@ -65,7 +65,7 @@ def create_surface(curves, name_base, rig):
     cmds.parent(surface, rig)
     return(surface)
 
-def joints_on_surface(surface, base_name, rig, num_joints=1, parent=None, right_side=False):
+def joints_on_surface(surface, base_name, rig, num_joints=1, parent=None, right_side=False, bulge=None, sink=None, triggerLength=None):
     section_size = 1/(num_joints+1)
     surfaceShape = cmds.listRelatives(surface, s=True)[0]
 
@@ -107,10 +107,10 @@ def joints_on_surface(surface, base_name, rig, num_joints=1, parent=None, right_
             cmds.setAttr(f'{skin_joints[i]}.parent', parent, type='string')
 
 
-    create_flex(surface, skin_joints, base_name, rig, follicle_shapes)
+    create_flex(surface, skin_joints, base_name, rig, follicle_shapes, bulge, sink, triggerLength)
     return(skin_joints)
 
-def create_flex(surface, joints, base_name, rig, follicleShapes):
+def create_flex(surface, joints, base_name, rig, follicleShapes, bulge, sink, triggerLength):
     surfaceShape = cmds.listRelatives(surface, s=True)[0]
     arclength = cmds.createNode('arcLengthDimension', n=f'{base_name}_arcLength')
     arclengthTrans = cmds.listRelatives(arclength, p=True)[0]
@@ -142,11 +142,30 @@ def create_flex(surface, joints, base_name, rig, follicleShapes):
     cmds.addAttr(surface, ln='sink', at='float', h=False, k=True, min=0.0)
     # calculate default values as a percentage of muscle length
     default = (cmds.getAttr(f'{surface}.length')*0.18)
-    cmds.setAttr(f'{surface}.bulge', default)
-    cmds.setAttr(f'{surface}.sink', (default*0.5))
+    if bulge == None:
+        bulge_value = (cmds.getAttr(f'{surface}.length')*0.18)
+    else:
+        bulge_value = bulge
+
+    if sink == None:
+        sink_value = (cmds.getAttr(f'{surface}.length')*0.18)*0.5
+    else:
+        sink_value = sink
+
+    cmds.setAttr(f'{surface}.bulge', bulge_value)
+    cmds.setAttr(f'{surface}.sink', sink_value)
+
+    if triggerLength == None:
+        triggerLength_value = 0.6
+    else:
+        triggerLength_value = triggerLength
+
+    # cmds.setAttr(f'{surface}.bulge', default)
+    # cmds.setAttr(f'{surface}.sink', (default*0.5))
 
     # add trigger attr for when the shape fires
-    cmds.addAttr(surface, ln='triggerLength', at='float', h=False, k=True, min=0.0, max=1.0, dv=0.6)
+
+    cmds.addAttr(surface, ln='triggerLength', at='float', h=False, k=True, min=0.0, max=1.0, dv=triggerLength_value)
 
     #drive offset on joints
     calculate_offset_factor(joints, follicleShapes, surface)
@@ -260,6 +279,10 @@ def create_muscle(muscle_name, parent, number_jnts):
     cmds.addAttr(f'{jointA}', ln='numJoints', at='short', h=False, k=False)
     cmds.setAttr(f'{jointA}.numJoints', number_jnts, cb=True)
 
+    cmds.addAttr(f'{jointA}', ln='bulge', at='float', h=False, k=False)
+    cmds.addAttr(f'{jointA}', ln='sink', at='float', h=False, k=False)
+    cmds.addAttr(f'{jointA}', ln='triggerLength', at='float', h=False, k=False)
+
     jointB = cmds.createNode('joint', n=f'{muscle_name}_End')
     cmds.setAttr(f'{jointB}.radius', 2)
     cmds.parent(jointB, jointA)
@@ -292,6 +315,25 @@ def mirror_guides():
         else:
             print(f"the right side parent for {right_guide} doesnt exist. Setting to nothing")
             cmds.setAttr(f'{right_guide}.parent', '', type='string')
+
+def mirror_rig_settings():
+    objs = cmds.ls('*_surface')
+    to_mirror = []
+    for o in objs:
+
+        if '_L' in o and check_for_attr(o, 'bulge'):
+            to_mirror.append(o)
+
+    for surface in to_mirror:
+        bulge = cmds.getAttr(f'{surface}.bulge')
+        sink = cmds.getAttr(f'{surface}.sink')
+        triggerLength = cmds.getAttr(f'{surface}.triggerLength')
+        right_surface = surface.replace('_L', '_R')
+        cmds.setAttr(f'{right_surface}.bulge', bulge)
+        cmds.setAttr(f'{right_surface}.sink', sink)
+        cmds.setAttr(f'{right_surface}.triggerLength', triggerLength)
+
+
 
 def check_for_attr(toCheck, attr, type=None):
     attrs = cmds.listAttr(toCheck, ud=True)
@@ -350,7 +392,15 @@ def build_all_rigs():
             parent = cmds.getAttr(f'{joint}.parent')
             num_joints = cmds.getAttr(f'{joint}.numJoints')
             end_joint = cmds.listRelatives(joint, c=True)[0]
-            def_joints = setup([joint,end_joint], num_joints, parent)
+
+            bulge = cmds.getAttr(f'{joint}.bulge')
+            sink = cmds.getAttr(f'{joint}.sink')
+            triggerLength = cmds.getAttr(f'{joint}.triggerLength')
+
+            if triggerLength == 0.0:
+                def_joints = setup([joint,end_joint], num_joints, parent, None, None, None)
+            else:
+                def_joints = setup([joint, end_joint], num_joints, parent, bulge, sink, triggerLength)
 
             for j in def_joints:
                 try:
@@ -380,6 +430,23 @@ def export_guides(file_path):
     cmds.select(to_export)
     cmds.file(file_path, es=True, type='mayaAscii')
     cmds.select(current_selection)
+
+def bake_to_guides():
+    all_joints = cmds.ls(type='joint')
+    for joint in all_joints:
+        if check_for_attr(joint, 'parent'):
+            surface = f'{joint}_surface'
+
+            if cmds.objExists(surface):
+                bulge = cmds.getAttr(f'{surface}.bulge')
+                sink = cmds.getAttr(f'{surface}.sink')
+                triggerLength = cmds.getAttr(f'{surface}.triggerLength')
+
+                cmds.setAttr(f'{joint}.bulge', bulge)
+                cmds.setAttr(f'{joint}.sink', sink)
+                cmds.setAttr(f'{joint}.triggerLength', triggerLength)
+            else:
+                pass
 
 def import_guides(file_path):
     cmds.file(file_path, i=True)

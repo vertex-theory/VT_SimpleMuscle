@@ -125,7 +125,9 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         export_layout.addWidget(export_button)
         import_button = QtWidgets.QPushButton('Import')
         export_layout.addWidget(import_button)
+        bake_button = QtWidgets.QPushButton("Bake Settings To Guides")
 
+        section_4_layout.addWidget(bake_button)
         section_4_layout.addLayout(export_layout)
 
         main_layout.addLayout(section_4_layout)
@@ -151,6 +153,8 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         utility2_layout = QtWidgets.QHBoxLayout()
         select_jnts_button = QtWidgets.QPushButton("Select Skin Joints")
         utility2_layout.addWidget(select_jnts_button)
+        mirror_settings_button = QtWidgets.QPushButton('Mirror Rig Settings')
+        utility2_layout.addWidget(mirror_settings_button)
 
         section_5_layout.addLayout(utility_layout)
         section_5_layout.addLayout(utility2_layout)
@@ -187,7 +191,9 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         delete_button.clicked.connect(self.delete_all)
         export_button.clicked.connect(self.show_save_dialog)
         import_button.clicked.connect(self.show_import_dialog)
+        bake_button.clicked.connect(self.bake_click)
         select_jnts_button.clicked.connect(self.select_joints)
+        mirror_settings_button.clicked.connect(self.mirror_settings)
 
     def create_horizontal_line(self):
         line = QtWidgets.QFrame()
@@ -207,11 +213,17 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
     def unparent_click(self):
         sm.unparent_def_joints()
 
+    def bake_click(self):
+        sm.bake_to_guides()
+
     def delete_all(self):
         sm.delete_all_rigs()
 
     def select_joints(self):
         sm.select_def_joints()
+
+    def mirror_settings(self):
+        sm.mirror_rig_settings()
 
     def create_muscle(self):
         muscle_name = self.muscle_name_input.text()
