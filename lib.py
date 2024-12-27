@@ -138,8 +138,8 @@ def create_flex(surface, joints, base_name, rig, follicleShapes, bulge, sink, tr
 
     #have that drive a setup where the joints start in a neutral position and when
     #the surface stretches the joints sink in and when it compresses they push out
-    cmds.addAttr(surface, ln='bulge', at='float', h=False, k=True, min=0.0)
-    cmds.addAttr(surface, ln='sink', at='float', h=False, k=True, min=0.0)
+    cmds.addAttr(surface, ln='bulge', at='float', h=False, k=True)
+    cmds.addAttr(surface, ln='sink', at='float', h=False, k=True)
     # calculate default values as a percentage of muscle length
     default = (cmds.getAttr(f'{surface}.length')*0.18)
     if bulge == None:
@@ -385,7 +385,13 @@ def unparent_def_joints():
                 print(f'{joint} is already a child of the world')
 
 def build_all_rigs():
-    all_joints = cmds.ls(type='joint')
+    # either builds on selected joints only or all joints
+    selection = cmds.ls(sl=True, type='joint')
+    if len(selection) == 0:
+        all_joints = cmds.ls(type='joint')
+    else:
+        all_joints = selection
+
     for joint in all_joints:
         if check_for_attr(joint, 'parent'):
             parent = cmds.getAttr(f'{joint}.parent')
