@@ -1,4 +1,5 @@
 import maya.cmds as cmds
+
 try:
     from PySide2 import QtWidgets, QtCore
 except ImportError:
@@ -27,17 +28,29 @@ def get_maya_main_window():
 
 
 # Main UI class
-class VTSimpleMuscleUI(QtWidgets.QDialog):
-    def __init__(self, parent=get_maya_main_window()):
-        super(VTSimpleMuscleUI, self).__init__(parent)
+class VTSimpleMuscleUI(QtWidgets.QWidget):
+    def __init__(self):
+        super(VTSimpleMuscleUI, self).__init__(parent=get_maya_main_window())
 
+        self.setObjectName("VTSimpleMuscleUI")
         self.setWindowTitle("VT_SimpleMuscle 1.0")
+        self.setWindowFlags(QtCore.Qt.Window)
         self.setMinimumWidth(300)
 
-        self.init_ui()
+        # Create the tab widget
+        self.tab_widget = QtWidgets.QTabWidget(self)
 
-    def init_ui(self):
-        main_layout = QtWidgets.QVBoxLayout(self)
+        self.create_muscle_tab()
+
+        self.create_push_joint_tab()
+
+        # Main layout
+        muscle_layout = QtWidgets.QVBoxLayout(self)
+        muscle_layout.addWidget(self.tab_widget)
+
+    def create_muscle_tab(self):
+        muscle_tab = QtWidgets.QWidget()
+        muscle_layout = QtWidgets.QVBoxLayout(muscle_tab)
 
         # First Section: Create Muscle Rig Guides
         section_1_layout = QtWidgets.QVBoxLayout()
@@ -80,10 +93,10 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         #section_1_layout.addWidget(muscle_name_label)
 
 
-        main_layout.addLayout(section_1_layout)
+        muscle_layout.addLayout(section_1_layout)
 
         # Horizontal line
-        main_layout.addWidget(self.create_horizontal_line())
+        muscle_layout.addWidget(self.create_horizontal_line())
 
         # Second Section: Set Guide Attributes
         section_2_layout = QtWidgets.QVBoxLayout()
@@ -98,15 +111,15 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
 
         section_2_layout.addLayout(guide_mirror_layout)
 
-        main_layout.addLayout(section_2_layout)
+        muscle_layout.addLayout(section_2_layout)
 
         # Horizontal line
-        main_layout.addWidget(self.create_horizontal_line())
+        muscle_layout.addWidget(self.create_horizontal_line())
 
         # Third Section: Build Muscle Rig
         section_3_layout = QtWidgets.QVBoxLayout()
         section_3_title = QtWidgets.QLabel(
-            "3. Build Muscle Rig")
+            "3. Build Muscle Rigs\nEither builds selected guides or all guides")
         section_3_title.setAlignment(QtCore.Qt.AlignLeft)
         section_3_layout.addWidget(section_3_title)
 
@@ -116,10 +129,10 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
 
         section_3_layout.addLayout(build_layout)
 
-        main_layout.addLayout(section_3_layout)
+        muscle_layout.addLayout(section_3_layout)
 
         # Horizontal line
-        main_layout.addWidget(self.create_horizontal_line())
+        muscle_layout.addWidget(self.create_horizontal_line())
 
         # Fourth Section: Build Muscle Rig
         section_4_layout = QtWidgets.QVBoxLayout()
@@ -138,10 +151,10 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         section_4_layout.addWidget(bake_button)
         section_4_layout.addLayout(export_layout)
 
-        main_layout.addLayout(section_4_layout)
+        muscle_layout.addLayout(section_4_layout)
 
         # Horizontal line
-        main_layout.addWidget(self.create_horizontal_line())
+        muscle_layout.addWidget(self.create_horizontal_line())
 
         # Fith Section: Build Muscle Rig
         section_5_layout = QtWidgets.QVBoxLayout()
@@ -167,7 +180,7 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         section_5_layout.addLayout(utility_layout)
         section_5_layout.addLayout(utility2_layout)
 
-        main_layout.addLayout(section_5_layout)
+        muscle_layout.addLayout(section_5_layout)
 
         # Footer Section: Author and Contact Info
         footer_widget = QtWidgets.QWidget()  # Create a QWidget for styling
@@ -187,9 +200,9 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         # Set background color of the footer to black
         footer_widget.setStyleSheet("background-color: black;")
 
-        main_layout.addWidget(footer_widget)
+        muscle_layout.addWidget(footer_widget)
 
-        # Connect button signals to functions (optional, just placeholders for now)
+        # Connect button signals to functions
         rig_parent_button.clicked.connect(self.set_rig_parent)
         create_muscle_button.clicked.connect(self.create_muscle)
         mirror_guide_button.clicked.connect(self.mirror_click)
@@ -202,6 +215,32 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         bake_button.clicked.connect(self.bake_click)
         select_jnts_button.clicked.connect(self.select_joints)
         mirror_settings_button.clicked.connect(self.mirror_settings)
+
+        self.tab_widget.addTab(muscle_tab, 'Simple Muscles')
+
+    def create_push_joint_tab(self):
+        pushjoint_tab = QtWidgets.QWidget()
+        pushjoint_layout = QtWidgets.QVBoxLayout(pushjoint_tab)
+
+        push_layout = QtWidgets.QVBoxLayout()
+        push_title = QtWidgets.QLabel(
+            "Build push joint rigs for selected joint.\nUse names like: Elbow_L, Index_01_L")
+        push_title.setAlignment(QtCore.Qt.AlignLeft)
+        push_layout.addWidget(push_title)
+
+        # push_name_layout = QtWidgets.QHBoxLayout()
+        self.push_name_input = QtWidgets.QLineEdit()
+        push_layout.addWidget(self.push_name_input)
+
+        push_build_button = QtWidgets.QPushButton('Build Push Joint Rig')
+        push_layout.addWidget(push_build_button)
+
+        # Connect button signals to functions
+        push_build_button.clicked.connect(self.push_build_click)
+
+        pushjoint_layout.addLayout(push_layout)
+
+        self.tab_widget.addTab(pushjoint_tab, 'Push Joints')
 
     def create_horizontal_line(self):
         line = QtWidgets.QFrame()
@@ -264,12 +303,22 @@ class VTSimpleMuscleUI(QtWidgets.QDialog):
         )
         sm.import_guides(file_path)
 
+    ######################################
+
+    def push_build_click(self):
+        name = self.push_name_input.text()
+        sm.create_push_joints(cmds.ls(sl=True)[0], name)
+
 # Function to show the UI
 def show_ui():
     if cmds.window("VTSimpleMuscleUI", exists=True):
         cmds.deleteUI("VTSimpleMuscleUI", wnd=True)
 
-    ui = VTSimpleMuscleUI()
-    ui.show()
+    try:
+        ui = VTSimpleMuscleUI()
+        ui.show()
+        print("UI displayed successfully.")
+    except Exception as e:
+        print(f"Failed to show UI: {e}")
 
 

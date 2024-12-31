@@ -456,6 +456,163 @@ def bake_to_guides():
 def import_guides(file_path):
     cmds.file(file_path, i=True)
 
+#############################################
+## push joints
+'''
+ToDo:
+clean up constraint nodes and parent them under a different node
+add mirror rig function
+add mirror settings function
+add export and import functions
+'''
+def create_push_joints(driver_joint, name):
+
+    if cmds.objExists(f'{name}_pushBase'):
+        cmds.warning(f'{name}_pushBase already exists skipping')
+        return
+    else:
+        hinge_axis = get_joint_hinge_axis(driver_joint)
+        push_axis = get_push_axis(driver_joint, hinge_axis)
+
+        base_joint = cmds.createNode('joint', n=f'{name}_pushBase')
+        pos_up_joint = cmds.createNode('joint', n=f'{name}_pushPosUp')
+        pos_dn_joint = cmds.createNode('joint', n=f'{name}_pushPosDn')
+        neg_up_joint = cmds.createNode('joint', n=f'{name}_pushNegUp')
+        neg_dn_joint = cmds.createNode('joint', n=f'{name}_pushNegDn')
+
+        # set joint appearance
+        for j in [pos_up_joint, pos_dn_joint, neg_up_joint, neg_dn_joint]:
+            cmds.setAttr(f'{j}.displayLocalAxis', True)
+            cmds.setAttr(f'{j}.overrideEnabled', 1)
+            cmds.setAttr(f'{j}.overrideColor', 9)
+
+        cmds.parent(pos_up_joint, base_joint)
+        cmds.parent(pos_dn_joint, base_joint)
+        cmds.parent(neg_up_joint, base_joint)
+        cmds.parent(neg_dn_joint, base_joint)
+
+        cmds.matchTransform(base_joint, driver_joint)
+        driver_parent = cmds.listRelatives(driver_joint, p=True, type='joint')
+        cmds.parent(base_joint, driver_parent)
+
+        # create base orient constraint
+        cmds.orientConstraint(driver_parent, driver_joint, base_joint, mo=False)
+
+        # get usable default values
+        aim_axis = get_aim_axis(driver_joint)
+        length = cmds.getAttr(f'{driver_joint}.translate{aim_axis}')
+        start = length * 0.2
+        end = length * 0.4
+        side_offset = length * 0.05
+
+        # add attrs to the base joint
+        cmds.addAttr(base_joint, ln='drvStart', at='float', h=False, k=True)
+        cmds.addAttr(base_joint, ln='drvEnd', at='float', dv=135, h=False, k=True)
+        cmds.addAttr(base_joint, ln='posStart', at='float', dv=start, h=False, k=True)
+        cmds.addAttr(base_joint, ln='posEnd', at='float', dv=end, h=False, k=True)
+        cmds.addAttr(base_joint, ln='negStart', at='float', dv=start*-1, h=False, k=True)
+        cmds.addAttr(base_joint, ln='negEnd', at='float', dv=end*-1, h=False, k=True)
+
+        # create remap nodes for pos and neg
+        pos_remap = cmds.createNode('remapValue', n=f'{name}_pos_remap')
+        neg_remap = cmds.createNode('remapValue', n=f'{name}_neg_remap')
+
+        # connect attrs from base joint and driver
+        cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
+        cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
+        cmds.connectAttr(f'{base_joint}.posStart', f'{pos_remap}.outputMin')
+        cmds.connectAttr(f'{base_joint}.posEnd', f'{pos_remap}.outputMax')
+        cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{pos_remap}.inputValue')
+
+        cmds.connectAttr(f'{base_joint}.drvStart', f'{neg_remap}.inputMin')
+        cmds.connectAttr(f'{base_joint}.drvEnd', f'{neg_remap}.inputMax')
+        cmds.connectAttr(f'{base_joint}.negStart', f'{neg_remap}.outputMin')
+        cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
+        cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{neg_remap}.inputValue')
+
+        # drive push translate on push joints
+        cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
+        cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
+        cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
+        cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+
+        # offset the up and dn joints a little so they don't overlap
+        cmds.setAttr(f'{pos_up_joint}.translate{aim_axis}', side_offset * -1)
+        cmds.setAttr(f'{pos_dn_joint}.translate{aim_axis}', side_offset)
+        cmds.setAttr(f'{neg_up_joint}.translate{aim_axis}', side_offset * -1)
+        cmds.setAttr(f'{neg_dn_joint}.translate{aim_axis}', side_offset)
+
+        # orient constrain up and dn joints to the parent and driver joints
+        cmds.orientConstraint(driver_parent, pos_up_joint, mo=False)
+        cmds.orientConstraint(driver_parent, neg_up_joint, mo=False)
+        cmds.orientConstraint(driver_joint, pos_dn_joint, mo=False)
+        cmds.orientConstraint(driver_joint, neg_dn_joint, mo=False)
+
+def get_aim_axis(driver_joint):
+    # Get the children of the driver_joint
+    children = cmds.listRelatives(driver_joint, type='joint', children=True)
+    if not children:
+        cmds.warning(f"No child joint found for {driver_joint}.")
+        return None
+
+    child_joint = children[0]
+
+    # Get the translate values of the child joint relative to the driver_joint
+    translate_values = cmds.getAttr(f"{child_joint}.translate")[0]
+
+    # Find the axis with the largest absolute translation value
+    axes = ['x', 'y', 'z']
+    axis_index = max(range(3), key=lambda i: abs(translate_values[i]))
+    sign = '-' if translate_values[axis_index] < 0 else ''
+
+    return f"{axes[axis_index].capitalize()}"
+
+def get_push_axis(driver_joint, hinge_axis='Z'):
+    aim_axis = get_aim_axis(driver_joint)
+    push_axis = None
+    for axis in ['X', 'Y', 'Z']:
+        if axis != aim_axis and axis != hinge_axis:
+            push_axis = axis
+
+    return push_axis
+
+
+def get_joint_hinge_axis(joint):
+    """
+    Determine the hinge axis of a Maya joint based on its orientation.
+
+    Args:
+        joint (str): The name of the Maya joint to analyze.
+
+    Returns:
+        str: The hinge axis of the joint ('x', 'y', 'z') or None if it cannot be determined.
+    """
+    parent = cmds.listRelatives(joint, p=True, type='joint')[0]
+    reader = cmds.createNode('transform')
+    cmds.matchTransform(reader, joint)
+    cmds.parent(reader, parent)
+
+    if not cmds.objectType(joint, isType="joint"):
+        cmds.error(f"The specified object '{joint}' is not a joint.")
+        return None
+
+    # Get the joint's rotate axis
+    rotate = cmds.getAttr(f"{reader}.rotate")[0]
+
+    # Check if all rotation values are zero (default state)
+    if all(value == 0.0 for value in rotate):
+        cmds.warning(f"The joint '{joint}' has no specific rotateAxis set. It might hinge along the default axis.")
+
+
+    # Calculate the dominant axis
+    abs_values = [abs(value) for value in rotate]
+    max_index = abs_values.index(max(abs_values))
+    axes = ['x', 'y', 'z']
+
+    cmds.delete(reader)
+
+    return axes[max_index].capitalize()
+
 
 
 
