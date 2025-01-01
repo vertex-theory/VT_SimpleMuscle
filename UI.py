@@ -85,6 +85,11 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         self.joint_number_input.setValue(3)  # Default value
         section_1_layout.addWidget(self.joint_number_input)
 
+        surf_type_label = QtWidgets.QLabel("Linear or Cubic\nCubic for twisting sections like a bicep\n(you can change this later):")
+        section_1_layout.addWidget(surf_type_label)
+        self.type_dropdown = QtWidgets.QComboBox()
+        self.type_dropdown.addItems(["Linear", "Cubic"])
+        section_1_layout.addWidget(self.type_dropdown)
 
         create_muscle_button = QtWidgets.QPushButton("Create Muscle Guide")
         section_1_layout.addWidget(create_muscle_button)
@@ -276,7 +281,8 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         muscle_name = self.muscle_name_input.text()
         parent = self.muscle_parent_input.text()
         number_jnts = self.joint_number_input.value()
-        sm.create_muscle(muscle_name, parent, number_jnts)
+        type = self.type_dropdown.currentText()
+        sm.create_muscle(muscle_name, parent, number_jnts, type)
 
     def set_rig_parent(self):
         try:

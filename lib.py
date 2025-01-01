@@ -4,10 +4,14 @@ import maya.cmds as cmds
 
 '''
 
-def setup(joints, num_joints=1, parent=None, bulge=None, sink=None, triggerLength=None):
+def setup(joints, num_joints=1, parent=None, bulge=None, sink=None, triggerLength=None, type=0):
     rig=create_rig_hierarchy(joints[0])
     curves=create_curves(joints)
-    surface = create_surface(curves, joints[0], rig)
+    typeName = 'Linear'
+    if type == 1:
+        typeName = 'Cubic'
+    surface = create_surface(curves, joints[0], rig, typeName)
+
     if '_R' in joints[0]:
         right_side = True
     else:
@@ -46,11 +50,21 @@ def get_chain_length(joints):
         if val != 0.0:
             return val
 
-def create_surface(curves, name_base, rig):
-    surface = cmds.loft(curves[0], curves[1], d=1, ch=False, ss=1, n=f'{name_base}_surface')[0]
-    cmds.rebuildSurface(surface, ch=False, rpo=True, rt=0, end=1, kr=0, kcp=False, kc=False, su=1, du=1, sv=1, dv=1,
+def create_surface(curves, name_base, rig, type='Linear'):
+    if type == 'Linear':
+        degree = 1
+    else:
+        degree = 3
+    surface = cmds.loft(curves[0], curves[1], d=degree, ch=False, ss=1, n=f'{name_base}_surface')[0]
+    cmds.rebuildSurface(surface, ch=False, rpo=True, rt=0, end=1, kr=0, kcp=False, kc=False, su=1, du=degree, sv=1, dv=degree,
                         tol=0.01, fr=0, dir=2)
     cmds.reverseSurface(surface, ch=False, rpo=True, d=3)
+
+    shape = cmds.listRelatives(surface, s=True)[0]
+
+    # turn on origins
+    cmds.setAttr(f'{shape}.dispOrigin', 1)
+    cmds.setAttr(f'{shape}.normalsDisplayScale', 0.1)
 
     if '_R' in name_base:
         cmds.reverseSurface(surface, ch=False, rpo=True, d=3)
@@ -251,7 +265,7 @@ def create_rig_hierarchy(base_name):
     cmds.addAttr(f'{rig}', ln='muscleRig', at='bool', k=False, h=True)
     return (rig)
 
-def create_muscle(muscle_name, parent, number_jnts):
+def create_muscle(muscle_name, parent, number_jnts, type='Linear'):
     if muscle_name == '':
         cmds.error('you need to enter a valid muscle rig name like "Bicep_L"')
         return()
@@ -269,6 +283,14 @@ def create_muscle(muscle_name, parent, number_jnts):
     cmds.setAttr(f'{jointA}.parent', parent, type='string', cb=True)
     cmds.addAttr(f'{jointA}', ln='numJoints', at='short', h=False, k=False)
     cmds.setAttr(f'{jointA}.numJoints', number_jnts, cb=True)
+    cmds.addAttr(f'{jointA}', ln='surfType', at='enum', en='Linear:Cubic', h=False, k=False)
+
+    if type == 'Linear':
+        typeVal = 0
+    else:
+        typeVal = 1
+
+    cmds.setAttr(f'{jointA}.surfType', typeVal, cb=True)
 
     cmds.addAttr(f'{jointA}', ln='bulge', at='float', h=False, k=False)
     cmds.addAttr(f'{jointA}', ln='sink', at='float', h=False, k=False)
@@ -401,11 +423,12 @@ def build_all_rigs():
             bulge = cmds.getAttr(f'{joint}.bulge')
             sink = cmds.getAttr(f'{joint}.sink')
             triggerLength = cmds.getAttr(f'{joint}.triggerLength')
+            type = cmds.getAttr(f'{joint}.surfType')
 
             if triggerLength == 0.0:
-                def_joints = setup([joint,end_joint], num_joints, parent, None, None, None)
+                def_joints = setup([joint,end_joint], num_joints, parent, None, None, None, type=type)
             else:
-                def_joints = setup([joint, end_joint], num_joints, parent, bulge, sink, triggerLength)
+                def_joints = setup([joint, end_joint], num_joints, parent, bulge, sink, triggerLength, type=type)
 
             for j in def_joints:
                 try:
@@ -543,10 +566,15 @@ def create_push_joints(driver_joint, name):
         cmds.setAttr(f'{neg_dn_joint}.translate{aim_axis}', side_offset)
 
         # orient constrain up and dn joints to the parent and driver joints
-        cmds.orientConstraint(driver_parent, pos_up_joint, mo=False)
-        cmds.orientConstraint(driver_parent, neg_up_joint, mo=False)
-        cmds.orientConstraint(driver_joint, pos_dn_joint, mo=False)
-        cmds.orientConstraint(driver_joint, neg_dn_joint, mo=False)
+        # skip all axes except the hinge axis
+        skip = []
+        for a in ['X', 'Y', 'Z']:
+            if a != hinge_axis:
+                skip.append(a.lower())
+        cmds.orientConstraint(driver_parent, pos_up_joint, mo=False, skip=skip)
+        cmds.orientConstraint(driver_parent, neg_up_joint, mo=False, skip=skip)
+        cmds.orientConstraint(driver_joint, pos_dn_joint, mo=False, skip=skip)
+        cmds.orientConstraint(driver_joint, neg_dn_joint, mo=False, skip=skip)
 
 def get_aim_axis(driver_joint):
     # Get the children of the driver_joint
