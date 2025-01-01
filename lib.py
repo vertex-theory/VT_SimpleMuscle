@@ -483,7 +483,6 @@ def import_guides(file_path):
 ## push joints
 '''
 ToDo:
-clean up constraint nodes and parent them under a different node
 add mirror rig function
 add mirror settings function
 add export and import functions
@@ -519,7 +518,10 @@ def create_push_joints(driver_joint, name):
         cmds.parent(base_joint, driver_parent)
 
         # create base orient constraint
-        cmds.orientConstraint(driver_parent, driver_joint, base_joint, mo=False)
+        base_orient = cmds.orientConstraint(driver_parent, driver_joint, base_joint, mo=False)[0]
+        if not cmds.objExists('push_constraints_grp'):
+            cmds.createNode('transform', n='push_constraints_grp')
+        cmds.parent(base_orient, 'push_constraints_grp')
 
         # get usable default values
         aim_axis = get_aim_axis(driver_joint)
@@ -571,10 +573,11 @@ def create_push_joints(driver_joint, name):
         for a in ['X', 'Y', 'Z']:
             if a != hinge_axis:
                 skip.append(a.lower())
-        cmds.orientConstraint(driver_parent, pos_up_joint, mo=False, skip=skip)
-        cmds.orientConstraint(driver_parent, neg_up_joint, mo=False, skip=skip)
-        cmds.orientConstraint(driver_joint, pos_dn_joint, mo=False, skip=skip)
-        cmds.orientConstraint(driver_joint, neg_dn_joint, mo=False, skip=skip)
+        pos_up_orient = cmds.orientConstraint(driver_parent, pos_up_joint, mo=False, skip=skip)[0]
+        neg_up_orient = cmds.orientConstraint(driver_parent, neg_up_joint, mo=False, skip=skip)[0]
+        pos_dn_orient = cmds.orientConstraint(driver_joint, pos_dn_joint, mo=False, skip=skip)[0]
+        neg_dn_orient = cmds.orientConstraint(driver_joint, neg_dn_joint, mo=False, skip=skip)[0]
+        cmds.parent(pos_up_orient, pos_dn_orient, neg_up_orient, neg_dn_orient, 'push_constraints_grp')
 
 def get_aim_axis(driver_joint):
     # Get the children of the driver_joint
