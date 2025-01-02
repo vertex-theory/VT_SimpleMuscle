@@ -1,8 +1,7 @@
 import maya.cmds as cmds
 
-'''
+import json
 
-'''
 
 def setup(joints, num_joints=1, parent=None, bulge=None, sink=None, triggerLength=None, type=0):
     rig=create_rig_hierarchy(joints[0])
@@ -119,7 +118,6 @@ def joints_on_surface(surface, base_name, rig, num_joints=1, parent=None, right_
         cmds.addAttr(f'{skin_joints[i]}', ln='parent', dt='string', h=False)
         if parent:
             cmds.setAttr(f'{skin_joints[i]}.parent', parent, type='string')
-
 
     create_flex(surface, skin_joints, base_name, rig, follicle_shapes, bulge, sink, triggerLength)
     return(skin_joints)
@@ -242,8 +240,6 @@ def create_flex(surface, joints, base_name, rig, follicleShapes, bulge, sink, tr
     cmds.connectAttr(f'{surface}.factor', f'{shape_remap}.inputValue')
     cmds.connectAttr(f'{shape_remap}.outValue', f'{surface}.shapeDriver')
 
-
-
 def calculate_offset_factor(joints, follicles, surface):
     curve = cmds.createNode('animCurveTA')
     cmds.setKeyframe(curve, t=0, v=0, itt='spline', ott='spline')
@@ -353,8 +349,6 @@ def mirror_rig_settings():
         cmds.setAttr(f'{right_surface}.bulge', bulge)
         cmds.setAttr(f'{right_surface}.sink', sink)
         cmds.setAttr(f'{right_surface}.triggerLength', triggerLength)
-
-
 
 def check_for_attr(toCheck, attr, type=None):
     attrs = cmds.listAttr(toCheck, ud=True)
@@ -528,7 +522,7 @@ def create_push_joints(driver_joint, name):
         length = cmds.getAttr(f'{driver_joint}.translate{aim_axis}')
         start = length * 0.2
         end = length * 0.4
-        side_offset = length * 0.05
+        side_offset = length * 0.0125
 
         # add attrs to the base joint
         cmds.addAttr(base_joint, ln='drvStart', at='float', h=False, k=True)
@@ -537,29 +531,51 @@ def create_push_joints(driver_joint, name):
         cmds.addAttr(base_joint, ln='posEnd', at='float', dv=end, h=False, k=True)
         cmds.addAttr(base_joint, ln='negStart', at='float', dv=start*-1, h=False, k=True)
         cmds.addAttr(base_joint, ln='negEnd', at='float', dv=end*-1, h=False, k=True)
+        cmds.addAttr(base_joint, ln='joint', dt='string')
+        cmds.setAttr(f'{base_joint}.joint', driver_joint, type='string')
 
         # create remap nodes for pos and neg
         pos_remap = cmds.createNode('remapValue', n=f'{name}_pos_remap')
         neg_remap = cmds.createNode('remapValue', n=f'{name}_neg_remap')
 
-        # connect attrs from base joint and driver
-        cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
-        cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
-        cmds.connectAttr(f'{base_joint}.posStart', f'{pos_remap}.outputMin')
-        cmds.connectAttr(f'{base_joint}.posEnd', f'{pos_remap}.outputMax')
+        # connect attrs from driver
         cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{pos_remap}.inputValue')
-
-        cmds.connectAttr(f'{base_joint}.drvStart', f'{neg_remap}.inputMin')
-        cmds.connectAttr(f'{base_joint}.drvEnd', f'{neg_remap}.inputMax')
-        cmds.connectAttr(f'{base_joint}.negStart', f'{neg_remap}.outputMin')
-        cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
         cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{neg_remap}.inputValue')
 
         # drive push translate on push joints
-        cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
-        cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
-        cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
-        cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+        # connect attrs from base joint to remap nodes
+        # we need to do the opposite for the right side
+        if '_r' or '_R' in name:
+
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+
+            cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
+            cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
+            cmds.connectAttr(f'{base_joint}.posStart', f'{pos_remap}.outputMin')
+            cmds.connectAttr(f'{base_joint}.posEnd', f'{pos_remap}.outputMax')
+
+            cmds.connectAttr(f'{base_joint}.drvStart', f'{neg_remap}.inputMin')
+            cmds.connectAttr(f'{base_joint}.drvEnd', f'{neg_remap}.inputMax')
+            cmds.connectAttr(f'{base_joint}.negStart', f'{neg_remap}.outputMin')
+            cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
+        else:
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+
+            cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
+            cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
+            cmds.connectAttr(f'{base_joint}.posStart', f'{pos_remap}.outputMin')
+            cmds.connectAttr(f'{base_joint}.posEnd', f'{pos_remap}.outputMax')
+
+            cmds.connectAttr(f'{base_joint}.drvStart', f'{neg_remap}.inputMin')
+            cmds.connectAttr(f'{base_joint}.drvEnd', f'{neg_remap}.inputMax')
+            cmds.connectAttr(f'{base_joint}.negStart', f'{neg_remap}.outputMin')
+            cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
 
         # offset the up and dn joints a little so they don't overlap
         cmds.setAttr(f'{pos_up_joint}.translate{aim_axis}', side_offset * -1)
@@ -607,17 +623,7 @@ def get_push_axis(driver_joint, hinge_axis='Z'):
 
     return push_axis
 
-
 def get_joint_hinge_axis(joint):
-    """
-    Determine the hinge axis of a Maya joint based on its orientation.
-
-    Args:
-        joint (str): The name of the Maya joint to analyze.
-
-    Returns:
-        str: The hinge axis of the joint ('x', 'y', 'z') or None if it cannot be determined.
-    """
     parent = cmds.listRelatives(joint, p=True, type='joint')[0]
     reader = cmds.createNode('transform')
     cmds.matchTransform(reader, joint)
@@ -634,7 +640,6 @@ def get_joint_hinge_axis(joint):
     if all(value == 0.0 for value in rotate):
         cmds.warning(f"The joint '{joint}' has no specific rotateAxis set. It might hinge along the default axis.")
 
-
     # Calculate the dominant axis
     abs_values = [abs(value) for value in rotate]
     max_index = abs_values.index(max(abs_values))
@@ -643,6 +648,133 @@ def get_joint_hinge_axis(joint):
     cmds.delete(reader)
 
     return axes[max_index].capitalize()
+
+def mirror_push_rigs():
+    # either mirror selected base joints or mirror all push rigs
+    to_mirror = []
+    selection = cmds.ls(sl=True)
+    if selection:
+        for item in selection:
+            if check_for_attr(item, 'drvStart', 'joint'):
+                to_mirror.append(item)
+    else:
+        all_joints = cmds.ls(type='joint')
+        for joint in all_joints:
+            if '_L' or '_l' in joint:
+                if check_for_attr(joint, 'drvStart', 'joint'):
+                    to_mirror.append(joint)
+
+    for base_joint in to_mirror:
+        driver_joint_L = cmds.getAttr(f'{base_joint}.joint')
+        driver_joint_R = ''
+        name_L = base_joint.split('_pushBase')[0]
+        name_R = ''
+        if '_L' in base_joint:
+            driver_joint_R = driver_joint_L.replace('L', 'R')
+        elif '_l' in base_joint:
+            driver_joint_R = driver_joint_L.replace('l', 'r')
+
+        if '_L' in name_L:
+            name_R = name_L.replace('_L','_R')
+        if '_l' in name_L:
+            name_R = name_L.replace('_l', '_r')
+
+        create_push_joints(driver_joint_R, name_R)
+        mirror_push_rig_settings(base_joint)
+
+def mirror_all_push_rig_settings():
+    # either mirror selected base joints or mirror all push rigs
+    to_mirror = []
+    selection = cmds.ls(sl=True)
+    if selection:
+        for item in selection:
+            if check_for_attr(item, 'drvStart', 'joint'):
+                to_mirror.append(item)
+    else:
+        all_joints = cmds.ls(type='joint')
+        for joint in all_joints:
+            if '_L' or '_l' in joint:
+                if check_for_attr(joint, 'drvStart', 'joint'):
+                    to_mirror.append(joint)
+
+    for push_base in to_mirror:
+        mirror_push_rig_settings(push_base)
+
+def mirror_push_rig_settings(push_base_L):
+    push_base_R = ''
+    joint_L = cmds.getAttr(f'{push_base_L}.joint')
+    joint_R = ''
+    if '_L' in push_base_L:
+        push_base_R = push_base_L.replace('_L', '_R')
+    elif '_l' in push_base_L:
+        push_base_R = push_base_L.replace('_l', '_r')
+    if '_L' in joint_L:
+        joint_R = joint_L.replace('_L', '_R')
+    if '_l' in joint_L:
+        joint_R = joint_L.replace('_l', '_r')
+
+    if cmds.objExists(push_base_R):
+        drvStart = cmds.getAttr(f'{push_base_L}.drvStart')
+        drvEnd = cmds.getAttr(f'{push_base_L}.drvEnd')
+        posStart = cmds.getAttr(f'{push_base_L}.posStart')
+        posEnd = cmds.getAttr(f'{push_base_L}.posEnd')
+        negStart = cmds.getAttr(f'{push_base_L}.negStart')
+        negEnd = cmds.getAttr(f'{push_base_L}.negEnd')
+
+        cmds.setAttr(f'{push_base_R}.drvStart', drvStart)
+        cmds.setAttr(f'{push_base_R}.drvEnd', drvEnd)
+        cmds.setAttr(f'{push_base_R}.posStart', posStart*-1)
+        cmds.setAttr(f'{push_base_R}.posEnd', posEnd*-1)
+        cmds.setAttr(f'{push_base_R}.negStart', negStart*-1)
+        cmds.setAttr(f'{push_base_R}.negEnd', negEnd*-1)
+        cmds.setAttr(f'{push_base_R}.joint', joint_R, type='string')
+
+def export_push_rigs(file_path):
+    data = {}
+    all_joints = cmds.ls(type='joint')
+    for joint in all_joints:
+        if check_for_attr(joint, 'drvStart', 'joint') and check_for_attr(joint, 'drvEnd', 'joint'):
+            rig_name = joint.split('_pushBase')[0]
+            driver_joint = cmds.getAttr(f'{joint}.joint')
+            drvStart = cmds.getAttr(f'{joint}.drvStart')
+            drvEnd = cmds.getAttr(f'{joint}.drvEnd')
+            posStart = cmds.getAttr(f'{joint}.posStart')
+            posEnd = cmds.getAttr(f'{joint}.posEnd')
+            negStart = cmds.getAttr(f'{joint}.negStart')
+            negEnd = cmds.getAttr(f'{joint}.negEnd')
+            data[driver_joint] = {
+                'rig_name':rig_name,
+                'drvStart':drvStart,
+                'drvEnd':drvEnd,
+                'posStart':posStart,
+                'posEnd':posEnd,
+                'negStart':negStart,
+                'negEnd':negEnd
+            }
+
+    with open(file_path, "w") as json_file:
+        json.dump(data, json_file, indent=4)
+
+def import_push_rigs(file_path):
+    with open(file_path, "r") as json_file:
+        loaded_data = json.load(json_file)
+
+    for key in loaded_data.keys():
+        create_push_joints(key, loaded_data[key]['rig_name'])
+
+    base_name = f"{loaded_data[key]['rig_name']}_pushBase"
+    if cmds.objExists(base_name):
+        cmds.setAttr(f'{base_name}.drvStart', loaded_data[key]['drvStart'])
+        cmds.setAttr(f'{base_name}.drvEnd', loaded_data[key]['drvEnd'])
+        cmds.setAttr(f'{base_name}.posStart', loaded_data[key]['posStart'])
+        cmds.setAttr(f'{base_name}.posEnd', loaded_data[key]['posEnd'])
+        cmds.setAttr(f'{base_name}.negStart', loaded_data[key]['negStart'])
+        cmds.setAttr(f'{base_name}.negEnd', loaded_data[key]['negEnd'])
+
+
+
+
+
 
 
 

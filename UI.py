@@ -15,17 +15,11 @@ import importlib
 import VT_SimpleMuscle.lib as sm
 importlib.reload(sm)
 
-'''
-TODO
-
-'''
-
 
 # Function to get the main Maya window
 def get_maya_main_window():
     main_window_ptr = omui.MQtUtil.mainWindow()
     return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
-
 
 # Main UI class
 class VTSimpleMuscleUI(QtWidgets.QWidget):
@@ -33,7 +27,7 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         super(VTSimpleMuscleUI, self).__init__(parent=get_maya_main_window())
 
         self.setObjectName("VTSimpleMuscleUI")
-        self.setWindowTitle("VT_SimpleMuscle 1.0")
+        self.setWindowTitle("VT_SimpleMuscle 1.0.0")
         self.setWindowFlags(QtCore.Qt.Window)
         self.setMinimumWidth(300)
 
@@ -93,10 +87,6 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
 
         create_muscle_button = QtWidgets.QPushButton("Create Muscle Guide")
         section_1_layout.addWidget(create_muscle_button)
-
-
-        #section_1_layout.addWidget(muscle_name_label)
-
 
         muscle_layout.addLayout(section_1_layout)
 
@@ -181,6 +171,8 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         utility2_layout.addWidget(select_jnts_button)
         mirror_settings_button = QtWidgets.QPushButton('Mirror Rig Settings')
         utility2_layout.addWidget(mirror_settings_button)
+        print_script_button = QtWidgets.QPushButton('Print Script')
+        utility2_layout.addWidget(print_script_button)
 
         section_5_layout.addLayout(utility_layout)
         section_5_layout.addLayout(utility2_layout)
@@ -220,30 +212,114 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         bake_button.clicked.connect(self.bake_click)
         select_jnts_button.clicked.connect(self.select_joints)
         mirror_settings_button.clicked.connect(self.mirror_settings)
+        print_script_button.clicked.connect(self.print_muscle_script_click)
 
         self.tab_widget.addTab(muscle_tab, 'Simple Muscles')
 
     def create_push_joint_tab(self):
         pushjoint_tab = QtWidgets.QWidget()
-        pushjoint_layout = QtWidgets.QVBoxLayout(pushjoint_tab)
+        push_main_layout = QtWidgets.QVBoxLayout(pushjoint_tab)
 
+        # add push rig to selected joint
         push_layout = QtWidgets.QVBoxLayout()
         push_title = QtWidgets.QLabel(
-            "Build push joint rigs for selected joint.\nUse names like: Elbow_L, Index_01_L")
+            "Build push joint rigs for selected joint.\nPush rig name (Use _L/_l, _M/_m, _R/_r):")
         push_title.setAlignment(QtCore.Qt.AlignLeft)
         push_layout.addWidget(push_title)
 
-        # push_name_layout = QtWidgets.QHBoxLayout()
         self.push_name_input = QtWidgets.QLineEdit()
+        self.push_name_input.setText('Elbow_L')
         push_layout.addWidget(self.push_name_input)
 
         push_build_button = QtWidgets.QPushButton('Build Push Joint Rig')
         push_layout.addWidget(push_build_button)
 
+        push_main_layout.addLayout(push_layout)
+
+        # add horizontal line
+        push_main_layout.addWidget(self.create_horizontal_line())
+
+        # mirror selected push rig or mirror all if nothing selected
+        mirror_layout = QtWidgets.QVBoxLayout()
+        mirror_title = QtWidgets.QLabel(
+            "Mirror selected push rigs.\nMirrors selected push base joints. If nothing is selected it will mirror all Left side push rigs")
+        mirror_title.setAlignment(QtCore.Qt.AlignLeft)
+        mirror_button = QtWidgets.QPushButton('Mirror Push Rigs')
+        mirror_layout.addWidget(mirror_title)
+        mirror_layout.addWidget(mirror_button)
+        push_main_layout.addLayout(mirror_layout)
+
+        # add horizontal line
+        push_main_layout.addWidget(self.create_horizontal_line())
+
+        # mirror push rig settings from left to right
+        mirror_settings_layout = QtWidgets.QVBoxLayout()
+        mirror_settings_title = QtWidgets.QLabel(
+            "Mirror all push rig settings from Left to Right")
+        mirror_settings_title.setAlignment(QtCore.Qt.AlignLeft)
+        mirror_settings_layout.addWidget(mirror_settings_title)
+        mirror_settings_button = QtWidgets.QPushButton('Mirror Push Rig Settings L>R')
+        mirror_settings_layout.addWidget(mirror_settings_button)
+        push_main_layout.addLayout(mirror_settings_layout)
+
+        # add horizontal line
+        push_main_layout.addWidget(self.create_horizontal_line())
+
+        # import export push rigs
+        import_layout = QtWidgets.QVBoxLayout()
+        import_title = QtWidgets.QLabel(
+            "Import and connect push rigs/Export all push rigs")
+        import_layout.addWidget(import_title)
+        import_h_layout = QtWidgets.QHBoxLayout()
+        import_layout.addLayout(import_h_layout)
+        import_button = QtWidgets.QPushButton('Import/Connect')
+        export_button = QtWidgets.QPushButton('Export All')
+        import_h_layout.addWidget(import_button)
+        import_h_layout.addWidget(export_button)
+        push_main_layout.addLayout(import_layout)
+
+        # add horizontal line
+        push_main_layout.addWidget(self.create_horizontal_line())
+
+        # utilities
+        print_title = QtWidgets.QLabel(
+            "Print script to import and connect push rigs\nto incorporate into other rig builds.")
+        print_button = QtWidgets.QPushButton('Print import and connect script')
+        push_main_layout.addWidget(print_title)
+        push_main_layout.addWidget(print_button)
+
+        # add horizontal line
+        push_main_layout.addWidget(self.create_horizontal_line())
+
+        # Footer Section: Author and Contact Info
+        footer_widget = QtWidgets.QWidget()  # Create a QWidget for styling
+        footer_layout = QtWidgets.QVBoxLayout(footer_widget)
+        footer_layout.setAlignment(QtCore.Qt.AlignCenter)
+
+        author_label = QtWidgets.QLabel("Author: Jeff Brodsky")
+        contact_label = QtWidgets.QLabel("vertexTheory.com")
+
+        # Set text color to white for visibility on black background
+        author_label.setStyleSheet("color: white;")
+        contact_label.setStyleSheet("color: white;")
+
+        footer_layout.addWidget(author_label)
+        footer_layout.addWidget(contact_label)
+
+        # Set background color of the footer to black
+        footer_widget.setStyleSheet("background-color: black;")
+
+        push_main_layout.addStretch()
+
+        push_main_layout.addWidget(footer_widget)
+
         # Connect button signals to functions
         push_build_button.clicked.connect(self.push_build_click)
-
-        pushjoint_layout.addLayout(push_layout)
+        mirror_button.clicked.connect(sm.mirror_push_rigs)
+        mirror_settings_button.clicked.connect(sm.mirror_all_push_rig_settings)
+        print_button.clicked.connect(self.print_push_script_click)
+        export_button.clicked.connect(self.show_save_push_dialog)
+        import_button.clicked.connect(self.show_import_push_dialog)
 
         self.tab_widget.addTab(pushjoint_tab, 'Push Joints')
 
@@ -309,11 +385,36 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         )
         sm.import_guides(file_path)
 
+    def show_save_push_dialog(self):
+        # Show save file dialog
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export Push Rigs",
+            "",
+            "JSON (*.json)"
+        )
+        sm.export_push_rigs(file_path)
+
+    def show_import_push_dialog(self):
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Import Push Rigs",
+            "",
+            "JSON (*.json)"
+        )
+        sm.import_push_rigs(file_path)
+
+    def print_muscle_script_click(self):
+        print('\n\n########################\nimport VT_SimpleMuscle.lib as sml\ncmds.file("path\\to\\your\\file.ma", i=True)\nsml.build_all_rigs()')
+
     ######################################
 
     def push_build_click(self):
         name = self.push_name_input.text()
         sm.create_push_joints(cmds.ls(sl=True)[0], name)
+
+    def print_push_script_click(self):
+        print('\n\n########################\nimport VT_SimpleMuscle.lib as sml\nfile_path = "path\\to\\your\\file.json"\nsml.import_push_rigs(file_path)')
 
 # Function to show the UI
 def show_ui():
