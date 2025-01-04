@@ -223,7 +223,7 @@ class VTSimpleMuscleUI(QtWidgets.QWidget):
         # add push rig to selected joint
         push_layout = QtWidgets.QVBoxLayout()
         push_title = QtWidgets.QLabel(
-            "Build push joint rigs for selected joint.\nPush rig name (Use _L/_l, _M/_m, _R/_r):")
+            "Build push joint rigs for selected joint.\nOnly works on joints that hinge on one axis\nPush rig name (Use _L/_l, _M/_m, _R/_r):")
         push_title.setAlignment(QtCore.Qt.AlignLeft)
         push_layout.addWidget(push_title)
 

@@ -473,6 +473,12 @@ def bake_to_guides():
 def import_guides(file_path):
     cmds.file(file_path, i=True)
 
+def update_guides():
+    all_joints = cmds.ls(type='joint')
+    for joint in all_joints:
+        if check_for_attr(joint, 'parent'):
+            cmds.addAttr(joint, ln='surfType', at='enum', en='Linear:Cubic', h=False, k=True)
+
 #############################################
 ## push joints
 '''
@@ -490,7 +496,8 @@ def create_push_joints(driver_joint, name):
         hinge_axis = get_joint_hinge_axis(driver_joint)
         push_axis = get_push_axis(driver_joint, hinge_axis)
 
-        base_joint = cmds.createNode('joint', n=f'{name}_pushBase')
+        # base_joint = cmds.createNode('joint', n=f'{name}_pushBase')
+        base_joint = cmds.duplicate(driver_joint, po=True)[0]
         pos_up_joint = cmds.createNode('joint', n=f'{name}_pushPosUp')
         pos_dn_joint = cmds.createNode('joint', n=f'{name}_pushPosDn')
         neg_up_joint = cmds.createNode('joint', n=f'{name}_pushNegUp')
@@ -508,14 +515,14 @@ def create_push_joints(driver_joint, name):
         cmds.parent(neg_dn_joint, base_joint)
 
         cmds.matchTransform(base_joint, driver_joint)
-        driver_parent = cmds.listRelatives(driver_joint, p=True, type='joint')
-        cmds.parent(base_joint, driver_parent)
+        driver_parent = cmds.listRelatives(driver_joint, p=True, type='joint')[0]
+        driver_child = cmds.listRelatives(driver_joint, c=True, type='joint')[0]
+        # cmds.parent(base_joint, driver_parent)
+        cmds.parent(base_joint, driver_joint)
 
-        # create base orient constraint
-        base_orient = cmds.orientConstraint(driver_parent, driver_joint, base_joint, mo=False)[0]
+        # create group to hold constraint nodes
         if not cmds.objExists('push_constraints_grp'):
             cmds.createNode('transform', n='push_constraints_grp')
-        cmds.parent(base_orient, 'push_constraints_grp')
 
         # get usable default values
         aim_axis = get_aim_axis(driver_joint)
@@ -538,19 +545,56 @@ def create_push_joints(driver_joint, name):
         pos_remap = cmds.createNode('remapValue', n=f'{name}_pos_remap')
         neg_remap = cmds.createNode('remapValue', n=f'{name}_neg_remap')
 
-        # connect attrs from driver
-        cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{pos_remap}.inputValue')
-        cmds.connectAttr(f'{driver_joint}.rotate{hinge_axis}', f'{neg_remap}.inputValue')
+        # create transforms to read the world space pos of each joint
+        parent_reader = cmds.createNode('transform', n=f'{name}_parent_reader')
+        driver_reader = cmds.createNode('transform', n=f'{name}_driver_reader')
+        child_reader = cmds.createNode('transform', n=f'{name}_child_reader')
+
+        cmds.pointConstraint(driver_parent, parent_reader, mo=False)
+        cmds.pointConstraint(driver_joint, driver_reader, mo=False)
+        cmds.pointConstraint(driver_child, child_reader, mo=False)
+
+        # get the vectors to find the angle between them
+        child_minus_driver = cmds.createNode('plusMinusAverage', n=f'{name}_child_minus_driver')
+        cmds.setAttr(f'{child_minus_driver}.operation', 2)
+        parent_minus_driver = cmds.createNode('plusMinusAverage', n=f'{name}_parent_minus_driver')
+        cmds.setAttr(f'{parent_minus_driver}.operation', 2)
+
+        cmds.connectAttr(f'{child_reader}.translate', f'{child_minus_driver}.input3D[0]')
+        cmds.connectAttr(f'{driver_reader}.translate', f'{child_minus_driver}.input3D[1]')
+
+        cmds.connectAttr(f'{parent_reader}.translate', f'{parent_minus_driver}.input3D[0]')
+        cmds.connectAttr(f'{driver_reader}.translate', f'{parent_minus_driver}.input3D[1]')
+
+        angle_between = cmds.createNode('angleBetween', n=f'{name}_angle')
+
+        cmds.connectAttr(f'{child_minus_driver}.output3D', f'{angle_between}.vector1')
+        cmds.connectAttr(f'{parent_minus_driver}.output3D', f'{angle_between}.vector2')
+
+        # div that angle by 2 to find the half way angle
+        multiply = cmds.createNode('multDoubleLinear', n=f'{name}_multiply')
+        cmds.setAttr(f'{multiply}.input2', 0.5)
+        cmds.connectAttr(f'{angle_between}.angle', f'{multiply}.input1')
+
+        # drive base joint hinge axis
+        cmds.connectAttr(f'{multiply}.output', f'{base_joint}.rotate{hinge_axis}')
+
+        cmds.connectAttr(f'{angle_between}.angle', f'{pos_remap}.inputValue')
+        cmds.connectAttr(f'{angle_between}.angle', f'{neg_remap}.inputValue')
+
+        start_angle = cmds.getAttr(f'{angle_between}.angle')
+        cmds.setAttr(f'{base_joint}.drvStart', start_angle)
+        cmds.setAttr(f'{base_joint}.drvEnd', start_angle+90)
 
         # drive push translate on push joints
         # connect attrs from base joint to remap nodes
         # we need to do the opposite for the right side
         if '_r' or '_R' in name:
 
-            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{aim_axis}')
 
             cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
             cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
@@ -562,10 +606,11 @@ def create_push_joints(driver_joint, name):
             cmds.connectAttr(f'{base_joint}.negStart', f'{neg_remap}.outputMin')
             cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
         else:
-            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{push_axis}')
-            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{push_axis}')
+
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_up_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{pos_remap}.outValue', f'{pos_dn_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_up_joint}.translate{aim_axis}')
+            cmds.connectAttr(f'{neg_remap}.outValue', f'{neg_dn_joint}.translate{aim_axis}')
 
             cmds.connectAttr(f'{base_joint}.drvStart', f'{pos_remap}.inputMin')
             cmds.connectAttr(f'{base_joint}.drvEnd', f'{pos_remap}.inputMax')
@@ -578,10 +623,10 @@ def create_push_joints(driver_joint, name):
             cmds.connectAttr(f'{base_joint}.negEnd', f'{neg_remap}.outputMax')
 
         # offset the up and dn joints a little so they don't overlap
-        cmds.setAttr(f'{pos_up_joint}.translate{aim_axis}', side_offset * -1)
-        cmds.setAttr(f'{pos_dn_joint}.translate{aim_axis}', side_offset)
-        cmds.setAttr(f'{neg_up_joint}.translate{aim_axis}', side_offset * -1)
-        cmds.setAttr(f'{neg_dn_joint}.translate{aim_axis}', side_offset)
+        cmds.setAttr(f'{pos_up_joint}.translate{push_axis}', side_offset * -1)
+        cmds.setAttr(f'{pos_dn_joint}.translate{push_axis}', side_offset)
+        cmds.setAttr(f'{neg_up_joint}.translate{push_axis}', side_offset * -1)
+        cmds.setAttr(f'{neg_dn_joint}.translate{push_axis}', side_offset)
 
         # orient constrain up and dn joints to the parent and driver joints
         # skip all axes except the hinge axis
