@@ -584,7 +584,7 @@ def create_push_joints(driver_joint, name):
 
         start_angle = cmds.getAttr(f'{angle_between}.angle')
         cmds.setAttr(f'{base_joint}.drvStart', start_angle)
-        cmds.setAttr(f'{base_joint}.drvEnd', start_angle+90)
+        cmds.setAttr(f'{base_joint}.drvEnd', 0.00)
 
         # drive push translate on push joints
         # connect attrs from base joint to remap nodes
